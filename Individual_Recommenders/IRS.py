@@ -1,5 +1,5 @@
 from lenskit.algorithms import Recommender  
-from lenskit.algorithms.user_knn import UserUser 
+from lenskit.algorithms.item_knn import ItemItem 
 
 
 
