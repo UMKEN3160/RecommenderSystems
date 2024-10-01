@@ -46,10 +46,12 @@ class Individual_Recommenders:
 #lets make a class for the modelss
 class contentBased:
     
-    def __init__(self,user_reviews,wine_data):
-        self.user_reviews=user_reviews
+    def __init__(self,user_reviews,wine1_data):
+        self.user_reviews=user_reviews.copy()
+        ##make copy of data so that we dont change the original data
+        wine_data=wine1_data.copy()
         # Preprocessing for 'Grapes', 'Harmonize', and 'Vintages'
-        print(wine_data['Grapes'])
+        
         wine_data['Grapes'] = wine_data['Grapes'].apply(lambda x: ' '.join(eval(x)))  # Convert list to space-separated string
         wine_data['Harmonize'] = wine_data['Harmonize'].apply(lambda x: ' '.join(eval(x)))
 
