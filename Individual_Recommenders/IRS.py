@@ -21,8 +21,8 @@ from sklearn.compose import ColumnTransformer
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.sparse import csr_matrix
-from implicit.als import AlternatingLeastSquares
-from implicit.evaluation import mean_average_precision_at_k
+#from implicit.als import AlternatingLeastSquares
+#from implicit.evaluation import mean_average_precision_at_k
 
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -43,21 +43,17 @@ class Individual_Recommenders:
 
         return recsys  
 
-#lets make a class for the modelss
+#lets make a class for the models
 class contentBased:
-    
-    def __init__(self,user_reviews,wine1_data):
-        self.user_reviews=user_reviews.copy()
-        ##make copy of data so that we dont change the original data
-        wine_data=wine1_data.copy()
-        # Preprocessing for 'Grapes', 'Harmonize', and 'Vintages'
+    def __init__(self,user_reviews,wine_data):
+        self.user_reviews=user_reviews
+        self.wine_data=wine_data
+        self.weights ={'grapes': 2.6351178844772396, 'harmonize': 1.553630179215512, 'vintages': 1.760447782530082, 'type': 2.5859874914949206, 'body': 1.2628975201148853, 'acidity': 0.9828619145406399, 'country': 0.6956261879697497, 'region': 0.6957519257816862, 'winery': 0.7668374998938243, 'abv': 2.11521395128059}
         
-        wine_data['Grapes'] = wine_data['Grapes'].apply(lambda x: ' '.join(eval(x)))  # Convert list to space-separated string
-        wine_data['Harmonize'] = wine_data['Harmonize'].apply(lambda x: ' '.join(eval(x)))
-
-
-
-
+    def preprocess(self):
+        # Preprocessing for 'Grapes', 'Harmonize', and 'Vintages'
+        self.wine_data['Grapes'] = self.wine_data['Grapes'].apply(lambda x: ' '.join(eval(x)))
+        self.wine_data['Harmonize'] = self.wine_data['Harmonize'].apply(lambda x: ' '.join(eval(x)))
         # Function to handle mixed vintages: list or integer
         def convert_to_list(vintages):
             if isinstance(vintages, int):
@@ -68,72 +64,55 @@ class contentBased:
                 try:
                     return list(map(str, eval(vintages)))  # Convert all elements to strings
                 except:
-                    return [str(vintages)]  # In case it's a string number
+                    return [str(vintages)]
             else:
-                # In case it's an unexpected format, treat as string
                 return [str(vintages)]
-
         # Apply the conversion to the 'Vintages' column
-        wine_data['Vintages'] = wine_data['Vintages'].apply(convert_to_list)
-
+        self.wine_data['Vintages'] = self.wine_data['Vintages'].apply(convert_to_list)
         # Convert the list into a space-separated string
-        wine_data['Vintages'] = wine_data['Vintages'].apply(lambda x: ' '.join(x))
-
-      
-        
+        self.wine_data['Vintages'] = self.wine_data['Vintages'].apply(lambda x: ' '.join(x))
+        # TF-IDF for 'Grapes', 'Harmonize', and 'Vintages'
         tfidf = TfidfVectorizer()
-       
-        wine_data_tfidf_grapes = tfidf.fit_transform(wine_data['Grapes'])
-        wine_data_tfidf_harmonize = tfidf.fit_transform(wine_data['Harmonize'])
-        wine_data_tfidf_vintages = tfidf.fit_transform(wine_data['Vintages'])
-
+        self.wine_data_tfidf_grapes = tfidf.fit_transform(self.wine_data['Grapes'])
+        self.wine_data_tfidf_harmonize = tfidf.fit_transform(self.wine_data['Harmonize'])
+        self.wine_data_tfidf_vintages = tfidf.fit_transform(self.wine_data['Vintages'])
         # One-hot encoding for 'Type', 'Body', 'Acidity', 'Country', 'RegionName', 'WineryName'
         one_hot = OneHotEncoder()
-
         categorical_features = ['Type', 'Body', 'Acidity', 'Country', 'RegionName', 'WineryName']
-        wine_categorical_onehot = one_hot.fit_transform(wine_data[categorical_features])
-
+        self.wine_categorical_onehot = one_hot.fit_transform(self.wine_data[categorical_features])
         # Scale the numerical feature 'ABV'
         scaler = StandardScaler()
-        wine_abv_scaled = scaler.fit_transform(wine_data[['ABV']])
-
-        # Define the weights for different features
-        weights ={'Grapes' : 2.6351178844772396, 'Harmonize' : 1.553630179215512, 'Vintages' : 1.760447782530082, 'Type' : 2.5859874914949206, 'Body' : 1.2628975201148853, 'Acidity' : 0.9828619145406399, 'Country' : 0.6956261879697497, 'Region' : 0.6957519257816862, 'Winery' : 0.7668374998938243, 'ABV' : 2.11521395128059}
+        self.wine_abv_scaled = scaler.fit_transform(self.wine_data[['ABV']])
         # Apply weights to categorical features (by columns)
-        wine_type_onehot = wine_categorical_onehot[:, :one_hot.categories_[0].size] * weights['Type']  # 'Type' weight
-        wine_body_onehot = wine_categorical_onehot[:, one_hot.categories_[0].size:one_hot.categories_[0].size + one_hot.categories_[1].size] * weights['Body']
-        wine_acidity_onehot = wine_categorical_onehot[:, one_hot.categories_[0].size + one_hot.categories_[1].size:one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size] * weights['Acidity']
-        wine_country_onehot = wine_categorical_onehot[:, one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size:one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size + one_hot.categories_[3].size] * weights['Country']
-        wine_region_onehot = wine_categorical_onehot[:, one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size + one_hot.categories_[3].size:one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size + one_hot.categories_[3].size + one_hot.categories_[4].size] * weights['Region']
-        wine_winery_onehot = wine_categorical_onehot[:, one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size + one_hot.categories_[3].size + one_hot.categories_[4].size:] * weights['Winery']
-
+        self.wine_type_onehot = self.wine_categorical_onehot[:, :one_hot.categories_[0].size] * self.weights['type']
+        self.wine_body_onehot = self.wine_categorical_onehot[:, one_hot.categories_[0].size:one_hot.categories_[0].size + one_hot.categories_[1].size] * self.weights['body']
+        self.wine_acidity_onehot = self.wine_categorical_onehot[:, one_hot.categories_[0].size + one_hot.categories_[1].size:one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size] * self.weights['acidity']
+        self.wine_country_onehot = self.wine_categorical_onehot[:, one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size:one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size + one_hot.categories_[3].size] * self.weights['country']
+        self.wine_region_onehot = self.wine_categorical_onehot[:, one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size + one_hot.categories_[3].size:one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size + one_hot.categories_[3].size + one_hot.categories_[4].size] * self.weights['region']
+        self.wine_winery_onehot = self.wine_categorical_onehot[:, one_hot.categories_[0].size + one_hot.categories_[1].size + one_hot.categories_[2].size + one_hot.categories_[3].size + one_hot.categories_[4].size:] * self.weights['winery']
         # Scale the numerical feature 'ABV'
         scaler = StandardScaler()
-        wine_abv_scaled = scaler.fit_transform(wine_data[['ABV']]) * weights['ABV']  # Apply weight for 'ABV'
-        wine_data_tfidf_grapes = wine_data_tfidf_grapes * weights['Grapes']  # Apply weight for 'Grapes'
-        wine_data_tfidf_harmonize = wine_data_tfidf_harmonize * weights['Harmonize']  # Apply weight for 'Harmonize'
-        wine_data_tfidf_vintages = wine_data_tfidf_vintages * weights['Vintages']  # Apply weight for 'Vintages'
-        
-        wine_features = sp.hstack([
-            wine_data_tfidf_grapes, 
-            wine_data_tfidf_harmonize, 
-            wine_data_tfidf_vintages,
-            wine_type_onehot, 
-            wine_body_onehot, 
-            wine_acidity_onehot,
-            wine_country_onehot, 
-            wine_region_onehot, 
-            wine_winery_onehot, 
-            wine_abv_scaled
+        self.wine_abv_scaled = scaler.fit_transform(self.wine_data[['ABV']]) * self.weights['abv']
+        self.wine_data_tfidf_grapes = self.wine_data_tfidf_grapes * self.weights['grapes']
+        self.wine_data_tfidf_harmonize = self.wine_data_tfidf_harmonize * self.weights['harmonize']
+        self.wine_data_tfidf_vintages = self.wine_data_tfidf_vintages * self.weights['vintages']
+        self.wine_features = sp.hstack([
+            self.wine_data_tfidf_grapes,
+            self.wine_data_tfidf_harmonize,
+            self.wine_data_tfidf_vintages,
+            self.wine_type_onehot,
+            self.wine_body_onehot,
+            self.wine_acidity_onehot,
+            self.wine_country_onehot,
+            self.wine_region_onehot,
+            self.wine_winery_onehot,
+            self.wine_abv_scaled
         ])
-                # Compute cosine similarity between all wines
-        wine_similarity = cosine_similarity(wine_features)
-
+        # Compute cosine similarity between all wines
+        self.wine_similarity = cosine_similarity(self.wine_features)
         # Store this in a DataFrame for easier access
-        wine_similarity_df = pd.DataFrame(wine_similarity, index=wine_data['WineID'], columns=wine_data['WineID'])
-
-        self.wine_similarity_df=wine_similarity_df
-
+        self.wine_similarity_df = pd.DataFrame(self.wine_similarity, index=self.wine_data['WineID'], columns=self.wine_data['WineID'])
+    
     def recommend_wines(self,user_id, top_n=5,returnall=False):
         # Get the wines the user has rated
         user_wines = self.user_reviews[self.user_reviews['UserID'] == user_id]
@@ -142,7 +121,11 @@ class contentBased:
         # Get similarity scores for each of these wines
         similar_wines = pd.Series(dtype=float)
         for wine_id in high_rated_wines:
-            similar_wines = similar_wines.append(self.wine_similarity_df[wine_id])
+            if wine_id in self.wine_similarity_df.columns:
+            #similar_wines = similar_wines.append(self.wine_similarity_df[wine_id])
+                similar_wines = pd.concat([similar_wines, self.wine_similarity_df[wine_id]])
+            else: 
+                print(f"WineID {wine_id} has no similarity scores available.")
         # Sort the wines by similarity score
         similar_wines = similar_wines.groupby(similar_wines.index).mean().sort_values(ascending=False)
         # Exclude wines the user has already rated
@@ -150,7 +133,7 @@ class contentBased:
         if returnall:
             return similar_wines.index.tolist()
         return similar_wines.head(top_n).index.tolist()
-
+    
 class collaborativeFiltering:
     def __init__(self,user_reviews):
         self.user_reviews=user_reviews
