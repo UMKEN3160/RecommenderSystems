@@ -29,9 +29,8 @@ class ContentBasedRecommender:
         # Transform features
         return self.encoder.transform(features)
 
-    def fit(self, train_ratings, train_features):
-        self.ratings = train_ratings  # Store ratings for later use
-        X_train = train_features  # Use the features passed in
+    def fit(self, train_ratings):
+        X_train = self.extract_features(train_ratings) 
         y_train = train_ratings['Rating']  
 
         # Standardize features
@@ -40,7 +39,6 @@ class ContentBasedRecommender:
         # Fit the SVR model
         self.model = SVR(kernel='linear', C=1.0, epsilon=0.1, gamma='scale')
         self.model.fit(X_train, y_train)
-
 
     def recommend(self, user_id, top_n=5):
         # Wines user has already rated
